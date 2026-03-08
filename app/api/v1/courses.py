@@ -5,6 +5,7 @@ from app.repositories.course_project_repo import InMemoryCourseProjectRepo
 from app.schemas.course_project import CourseProjectResponse, CreateCourseRequest
 from app.schemas.plan_option import ConfirmPlanRequest
 from app.services.course_project_service import CourseProjectService
+from app.services.deliverable_service import get_deliverable_service
 from app.services.generation_service import get_generation_service
 from app.workflows.plan_options_workflow import generate_plan_options
 
@@ -63,5 +64,6 @@ def generate_lesson_plan(course_id: str) -> dict[str, str]:
         raise HTTPException(status_code=400, detail="plan not confirmed")
 
     task = get_generation_service().start_task(course_id)
-    course.stage = "generating"
+    get_deliverable_service().upsert_placeholder(course_id)
+    course.stage = "generated"
     return {"task_id": task.id}
