@@ -1,4 +1,8 @@
+from app.agents.prompt_protocol import PromptSpec, build_quality_prompt
+
+
 def collect_quality_issues(output: dict, grade: str) -> list[str]:
+    _ = get_prompt_spec(output=output, grade=grade)
     issues: list[str] = []
 
     banned_phrases = ["你太笨了", "真差劲", "别问了"]
@@ -17,3 +21,15 @@ def collect_quality_issues(output: dict, grade: str) -> list[str]:
         issues.append("age_mismatch:advanced_for_preschool")
 
     return issues
+
+
+def build_final_recommendation(score: int) -> str:
+    if score >= 90:
+        return "可直接交付"
+    if score >= 75:
+        return "建议微调后交付"
+    return "需修改后再质检"
+
+
+def get_prompt_spec(output: dict, grade: str) -> PromptSpec:
+    return build_quality_prompt(output=output, grade=grade)
