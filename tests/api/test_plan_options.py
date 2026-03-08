@@ -14,6 +14,8 @@ def test_generate_and_confirm_plan():
 
     options = client.post(f"/api/v1/courses/{created['id']}/plan-options").json()
     assert len(options["items"]) == 3
+    course_after_options = client.get(f"/api/v1/courses/{created['id']}").json()
+    assert course_after_options["stage"] == "options_ready"
 
     confirm = client.post(
         f"/api/v1/courses/{created['id']}/confirm-plan",

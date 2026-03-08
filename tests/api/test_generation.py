@@ -24,7 +24,11 @@ def test_start_generation_returns_task_id():
 
     resp = client.post(f"/api/v1/courses/{confirmed_course_id}/generate-lesson-plan")
     assert resp.status_code == 202
-    assert "task_id" in resp.json()
+    task_id = resp.json()["task_id"]
+    task = client.get(f"/api/v1/tasks/{task_id}").json()
+    assert task["status"] == "success"
+    course = client.get(f"/api/v1/courses/{confirmed_course_id}").json()
+    assert course["stage"] == "reviewed"
 
 
 def test_get_task_status():

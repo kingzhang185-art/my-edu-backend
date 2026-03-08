@@ -20,3 +20,6 @@ def test_chat_returns_clarification_question():
 
     assert resp.status_code == 200
     assert "next_question" in resp.json()
+
+    refreshed = client.get(f"/api/v1/courses/{course_id}").json()
+    assert refreshed["stage"] == "clarifying"
