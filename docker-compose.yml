@@ -1,0 +1,59 @@
+name: my-edu-backend
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: my-edu-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: my_edu
+      MYSQL_USER: my_edu
+      MYSQL_PASSWORD: my_edu
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: my-edu-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: docker.m.daocloud.io/library/mongo:8.0
+    container_name: my-edu-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE: my_edu
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --username root --password root --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })' --quiet"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+volumes:
+  mysql_data:
+  redis_data:
+  mongo_data:

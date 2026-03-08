@@ -7,6 +7,13 @@ FastAPI backend for the AI lesson-plan MVP.
 - Python 3.11+
 - Docker + Docker Compose (for MySQL, Redis, MongoDB)
 
+## Start Local Infra
+
+```bash
+cp .env.example .env
+docker compose up -d mysql redis mongo
+```
+
 ## Install
 
 ```bash

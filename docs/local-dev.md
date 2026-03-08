@@ -7,8 +7,8 @@ docker compose up -d mysql redis mongo
 ```
 
 Recommended local ports:
-- MySQL: `3306`
-- Redis: `6379`
+- MySQL: `3307`
+- Redis: `6380`
 - MongoDB: `27017`
 
 ## 2. Configure Environment
