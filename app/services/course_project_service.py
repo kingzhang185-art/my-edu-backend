@@ -1,12 +1,12 @@
 from fastapi import HTTPException
 
 from app.models.course_project import CourseProject
-from app.repositories.course_project_repo import InMemoryCourseProjectRepo
+from app.repositories.course_project_repo import CourseProjectRepo
 from app.schemas.course_project import CreateCourseRequest
 
 
 class CourseProjectService:
-    def __init__(self, repo: InMemoryCourseProjectRepo) -> None:
+    def __init__(self, repo: CourseProjectRepo) -> None:
         self._repo = repo
 
     def create(self, request: CreateCourseRequest) -> CourseProject:
@@ -22,3 +22,6 @@ class CourseProjectService:
         if course is None:
             raise HTTPException(status_code=404, detail="course not found")
         return course
+
+    def save(self, course: CourseProject) -> CourseProject:
+        return self._repo.save(course)

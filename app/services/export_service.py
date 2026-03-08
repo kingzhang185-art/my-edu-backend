@@ -2,13 +2,12 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from app.db.models import ExportRecordModel
+from app.db.session import SessionLocal
 from app.services.deliverable_service import get_deliverable_service
 
 
-class InMemoryExportService:
-    def __init__(self) -> None:
-        self._exports: dict[str, dict] = {}
-
+class SqlExportService:
     def create_export(self, course_id: str, fmt: str) -> dict[str, str]:
         if fmt not in {"pdf", "word"}:
             raise HTTPException(status_code=400, detail="unsupported export format")
@@ -25,7 +24,23 @@ class InMemoryExportService:
             "markdown": markdown,
             "download_url": f"https://example.com/exports/{export_id}.{fmt}",
         }
-        self._exports[export_id] = record
+        parsed_course_id = _parse_course_id(course_id)
+        if parsed_course_id is None:
+            raise HTTPException(status_code=404, detail="course not found")
+
+        with SessionLocal() as session:
+            session.add(
+                ExportRecordModel(
+                    id=export_id,
+                    course_id=parsed_course_id,
+                    format=fmt,
+                    status="success",
+                    markdown=markdown,
+                    download_url=record["download_url"],
+                )
+            )
+            session.commit()
+
         return {"export_id": export_id, "download_url": record["download_url"]}
 
     @staticmethod
@@ -37,8 +52,15 @@ class InMemoryExportService:
         return "\n".join(lines)
 
 
-_export_service = InMemoryExportService()
+_export_service = SqlExportService()
 
 
-def get_export_service() -> InMemoryExportService:
+def get_export_service() -> SqlExportService:
     return _export_service
+
+
+def _parse_course_id(course_id: str) -> int | None:
+    try:
+        return int(course_id)
+    except ValueError:
+        return None

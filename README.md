@@ -14,13 +14,24 @@ cp .env.example .env
 docker compose up -d mysql redis mongo
 ```
 
+Key runtime env vars:
+- `LOG_LEVEL` (default: `INFO`)
+- `CORS_ALLOW_ORIGINS` (comma-separated origins)
+
 ## Install
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install fastapi uvicorn pytest httpx
+pip install -r requirements.txt
+```
+
+## Database Migration
+
+```bash
+source .venv/bin/activate
+alembic upgrade head
 ```
 
 ## Run

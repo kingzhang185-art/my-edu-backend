@@ -1,19 +1,22 @@
 from fastapi import APIRouter, HTTPException, status
 
+from app.db.models import CoursePlanOptionModel
+from app.db.session import SessionLocal
 from app.models.course_project import CourseProject
-from app.repositories.course_project_repo import InMemoryCourseProjectRepo
+from app.repositories.course_project_repo import SqlAlchemyCourseProjectRepo
 from app.schemas.course_project import CourseProjectResponse, CreateCourseRequest
 from app.schemas.plan_option import ConfirmPlanRequest
 from app.services.course_project_service import CourseProjectService
 from app.services.deliverable_service import get_deliverable_service
 from app.services.generation_service import get_generation_service
+from app.services.usage_log_service import UsageLogService
 from app.workflows.plan_options_workflow import generate_plan_options
 
 router = APIRouter(prefix="/api/v1/courses", tags=["courses"])
 
-_repo = InMemoryCourseProjectRepo()
+_repo = SqlAlchemyCourseProjectRepo(SessionLocal)
 _service = CourseProjectService(_repo)
-_plan_options_by_course: dict[str, list[dict[str, str]]] = {}
+_usage_log_service = UsageLogService(SessionLocal)
 
 
 def get_course_service() -> CourseProjectService:
@@ -27,6 +30,7 @@ def _to_response(course: CourseProject) -> CourseProjectResponse:
 @router.post("", response_model=CourseProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_course(payload: CreateCourseRequest) -> CourseProjectResponse:
     course = _service.create(payload)
+    _usage_log_service.log("course_created", course.id, payload.model_dump())
     return _to_response(course)
 
 
@@ -40,20 +44,22 @@ def get_course(course_id: str) -> CourseProjectResponse:
 def create_plan_options(course_id: str) -> dict[str, list[dict[str, str]]]:
     course = _service.get_or_404(course_id)
     options = generate_plan_options(course)
-    _plan_options_by_course[course_id] = options["items"]
+    _replace_plan_options(course_id, options["items"])
+    _usage_log_service.log("plan_options_generated", course_id, {"count": len(options["items"])})
     return options
 
 
 @router.post("/{course_id}/confirm-plan", response_model=CourseProjectResponse)
 def confirm_plan(course_id: str, payload: ConfirmPlanRequest) -> CourseProjectResponse:
     course = _service.get_or_404(course_id)
-    options = _plan_options_by_course.get(course_id, [])
-    selected = next((item for item in options if item["id"] == payload.option_id), None)
+    selected = _get_plan_option(course_id, payload.option_id)
     if selected is None:
         return _to_response(course)
 
     course.selected_option_id = payload.option_id
     course.stage = "plan_confirmed"
+    _service.save(course)
+    _usage_log_service.log("plan_confirmed", course_id, {"option_id": payload.option_id})
     return _to_response(course)
 
 
@@ -66,4 +72,34 @@ def generate_lesson_plan(course_id: str) -> dict[str, str]:
     task = get_generation_service().start_task(course_id)
     get_deliverable_service().upsert_placeholder(course_id)
     course.stage = "generated"
+    _service.save(course)
+    _usage_log_service.log("generation_started", course_id, {"task_id": task.id})
     return {"task_id": task.id}
+
+
+def _replace_plan_options(course_id: str, items: list[dict[str, str]]) -> None:
+    parsed_course_id = int(course_id)
+    with SessionLocal() as session:
+        session.query(CoursePlanOptionModel).filter(
+            CoursePlanOptionModel.course_id == parsed_course_id
+        ).delete()
+        for item in items:
+            session.add(
+                CoursePlanOptionModel(
+                    course_id=parsed_course_id,
+                    option_key=item["id"],
+                    label=item["label"],
+                )
+            )
+        session.commit()
+
+
+def _get_plan_option(course_id: str, option_id: str) -> CoursePlanOptionModel | None:
+    parsed_course_id = int(course_id)
+    with SessionLocal() as session:
+        return (
+            session.query(CoursePlanOptionModel)
+            .filter(CoursePlanOptionModel.course_id == parsed_course_id)
+            .filter(CoursePlanOptionModel.option_key == option_id)
+            .first()
+        )

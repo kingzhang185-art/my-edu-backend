@@ -1,10 +1,12 @@
+import json
+
 from fastapi import HTTPException
 
+from app.db.models import CourseProjectVersionModel
+from app.db.session import SessionLocal
 
-class InMemoryDeliverableService:
-    def __init__(self) -> None:
-        self._deliverables: dict[str, dict] = {}
 
+class SqlDeliverableService:
     def upsert_placeholder(self, course_id: str) -> dict:
         lesson_plan = {
             "meta": {"course_id": course_id},
@@ -14,30 +16,72 @@ class InMemoryDeliverableService:
             "board_plan": "",
             "exercises": [],
         }
-        record = {"course_id": course_id, "lesson_plan": lesson_plan}
-        self._deliverables[course_id] = record
-        return record
+        return self._create_version(course_id, lesson_plan, source="generate")
 
     def get_latest(self, course_id: str) -> dict:
-        record = self._deliverables.get(course_id)
+        parsed_id = _parse_course_id(course_id)
+        if parsed_id is None:
+            raise HTTPException(status_code=404, detail="deliverable not found")
+
+        with SessionLocal() as session:
+            record = (
+                session.query(CourseProjectVersionModel)
+                .filter(CourseProjectVersionModel.course_id == parsed_id)
+                .order_by(CourseProjectVersionModel.version_no.desc())
+                .first()
+            )
         if record is None:
             raise HTTPException(status_code=404, detail="deliverable not found")
-        return record
+        payload = json.loads(record.snapshot_json)
+        return {"course_id": course_id, "lesson_plan": payload["lesson_plan"]}
 
     def regenerate_section(self, course_id: str, section: str) -> dict:
-        record = self.get_latest(course_id)
-        lesson_plan = record["lesson_plan"]
+        latest = self.get_latest(course_id)
+        lesson_plan = latest["lesson_plan"]
 
         if section == "timeline":
             lesson_plan["timeline"] = [{"phase": "导入", "minutes": 8, "regenerated": True}]
         else:
             lesson_plan[section] = {"regenerated": True}
 
-        return record
+        return self._create_version(course_id, lesson_plan, source=f"regenerate:{section}")
 
 
-_deliverable_service = InMemoryDeliverableService()
+    def _create_version(self, course_id: str, lesson_plan: dict, source: str) -> dict:
+        parsed_id = _parse_course_id(course_id)
+        if parsed_id is None:
+            raise HTTPException(status_code=404, detail="course not found")
+
+        with SessionLocal() as session:
+            current_max = (
+                session.query(CourseProjectVersionModel.version_no)
+                .filter(CourseProjectVersionModel.course_id == parsed_id)
+                .order_by(CourseProjectVersionModel.version_no.desc())
+                .first()
+            )
+            next_version = 1 if current_max is None else current_max[0] + 1
+            snapshot_json = json.dumps({"lesson_plan": lesson_plan}, ensure_ascii=False)
+            session.add(
+                CourseProjectVersionModel(
+                    course_id=parsed_id,
+                    version_no=next_version,
+                    source=source,
+                    snapshot_json=snapshot_json,
+                )
+            )
+            session.commit()
+        return {"course_id": course_id, "lesson_plan": lesson_plan}
 
 
-def get_deliverable_service() -> InMemoryDeliverableService:
+_deliverable_service = SqlDeliverableService()
+
+
+def get_deliverable_service() -> SqlDeliverableService:
     return _deliverable_service
+
+
+def _parse_course_id(course_id: str) -> int | None:
+    try:
+        return int(course_id)
+    except ValueError:
+        return None
