@@ -17,6 +17,10 @@ docker compose up -d mysql redis mongo
 Key runtime env vars:
 - `LOG_LEVEL` (default: `INFO`)
 - `CORS_ALLOW_ORIGINS` (comma-separated origins)
+- `MODEL_GATEWAY_PROVIDER` (`deepseek` or `mock`)
+- `MODEL_GATEWAY_API_KEY` (DeepSeek `sk-...`)
+- `MODEL_GATEWAY_BASE_URL` (default: `https://api.deepseek.com`)
+- `MODEL_GATEWAY_MODEL` (default: `deepseek-chat`)
 
 ## Install
 

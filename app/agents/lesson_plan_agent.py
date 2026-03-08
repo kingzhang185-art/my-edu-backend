@@ -1,9 +1,16 @@
 from app.models.course_project import CourseProject
-from app.agents.templates import build_plan_template
 from typing import cast
+
+from app.agents.prompt_protocol import PromptSpec, build_lesson_plan_prompt
+from app.agents.templates import build_plan_template
+from app.services.model_gateway import get_model_gateway
 
 
 def generate_lesson_plan(course: CourseProject) -> dict:
+    spec = get_prompt_spec(course)
+    llm_plan = _parse_llm_lesson_plan(get_model_gateway().generate_json(spec))
+    if llm_plan is not None:
+        return llm_plan
     segment = _infer_segment(course.grade)
     template = build_plan_template(segment=segment, subject=course.subject)
     activities = cast(list[str], template["activities"])
@@ -35,8 +42,27 @@ def generate_lesson_plan(course: CourseProject) -> dict:
     }
 
 
+def get_prompt_spec(course: CourseProject) -> PromptSpec:
+    return build_lesson_plan_prompt(course)
+
+
 def _infer_segment(grade: str) -> str:
     preschool_markers = ("幼", "学前", "小班", "中班", "大班")
     if any(marker in grade for marker in preschool_markers):
         return "preschool"
     return "k12"
+
+
+def _parse_llm_lesson_plan(payload: dict) -> dict | None:
+    required_fields = ["meta", "objectives", "timeline", "teacher_script", "board_plan", "exercises"]
+    if not isinstance(payload, dict):
+        return None
+    if any(field not in payload for field in required_fields):
+        return None
+    if not isinstance(payload.get("meta"), dict):
+        return None
+    if not isinstance(payload.get("timeline"), list):
+        return None
+    if not isinstance(payload.get("teacher_script"), list):
+        return None
+    return payload
