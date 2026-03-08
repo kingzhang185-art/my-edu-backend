@@ -10,6 +10,10 @@ _repo = InMemoryCourseProjectRepo()
 _service = CourseProjectService(_repo)
 
 
+def get_course_service() -> CourseProjectService:
+    return _service
+
+
 @router.post("", response_model=CourseProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_course(payload: CreateCourseRequest) -> CourseProjectResponse:
     course = _service.create(payload)
