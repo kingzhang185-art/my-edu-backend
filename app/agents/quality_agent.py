@@ -1,8 +1,10 @@
 from app.agents.prompt_protocol import PromptSpec, build_quality_prompt
+from app.services.model_gateway import get_model_gateway
+
+_ALLOWED_RECOMMENDATIONS = {"可直接交付", "建议微调后交付", "需修改后再质检"}
 
 
 def collect_quality_issues(output: dict, grade: str) -> list[str]:
-    _ = get_prompt_spec(output=output, grade=grade)
     issues: list[str] = []
 
     banned_phrases = ["你太笨了", "真差劲", "别问了"]
@@ -33,3 +35,45 @@ def build_final_recommendation(score: int) -> str:
 
 def get_prompt_spec(output: dict, grade: str) -> PromptSpec:
     return build_quality_prompt(output=output, grade=grade)
+
+
+def evaluate_quality(output: dict, grade: str) -> dict | None:
+    spec = get_prompt_spec(output=output, grade=grade)
+    payload = get_model_gateway().generate_json(spec)
+    return _parse_quality_payload(payload)
+
+
+def _parse_quality_payload(payload: dict) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+
+    passed = payload.get("passed")
+    if not isinstance(passed, bool):
+        return None
+
+    raw_issues = payload.get("issues", [])
+    if not isinstance(raw_issues, list):
+        return None
+    issues = [issue for issue in raw_issues if isinstance(issue, str) and issue.strip()]
+
+    raw_score = payload.get("quality_score")
+    if isinstance(raw_score, bool):
+        return None
+    if isinstance(raw_score, (int, float)):
+        score = int(raw_score)
+    else:
+        return None
+    score = max(0, min(100, score))
+
+    raw_recommendation = payload.get("final_recommendation")
+    if isinstance(raw_recommendation, str) and raw_recommendation in _ALLOWED_RECOMMENDATIONS:
+        recommendation = raw_recommendation
+    else:
+        recommendation = build_final_recommendation(score)
+
+    return {
+        "passed": passed,
+        "issues": issues,
+        "quality_score": score,
+        "final_recommendation": recommendation,
+    }

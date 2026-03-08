@@ -4,7 +4,7 @@ from typing import Protocol
 
 import httpx
 
-from app.agents.prompt_protocol import PromptSpec
+from app.agents.prompt_protocol import PromptSpec, build_repair_prompt
 from app.core.config import settings
 
 logger = logging.getLogger("app.model_gateway")
@@ -36,6 +36,32 @@ class DeepSeekModelGateway:
         if not self._has_valid_key():
             return {}
 
+        body = self._request(spec)
+        if body is None:
+            return {}
+
+        parsed = _parse_chat_completion_json(body)
+        if parsed:
+            return parsed
+
+        raw_content = _extract_chat_completion_content(body)
+        for level in (1, 2):
+            repair_spec = build_repair_prompt(spec, raw_content=raw_content, level=level)
+            repair_body = self._request(repair_spec)
+            if repair_body is None:
+                continue
+
+            parsed = _parse_chat_completion_json(repair_body)
+            if parsed:
+                return parsed
+            raw_content = _extract_chat_completion_content(repair_body)
+
+        return {}
+
+    def _has_valid_key(self) -> bool:
+        return is_valid_model_gateway_key(self.provider, self.api_key)
+
+    def _request(self, spec: PromptSpec) -> dict | None:
         payload = {
             "model": self.model,
             "messages": [
@@ -46,7 +72,6 @@ class DeepSeekModelGateway:
             "max_tokens": spec.max_tokens,
             "temperature": 0.3,
         }
-
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(
@@ -58,26 +83,17 @@ class DeepSeekModelGateway:
                     json=payload,
                 )
                 response.raise_for_status()
-                body = response.json()
+                return response.json()
         except Exception as exc:
             logger.warning(
                 "model gateway request failed, fallback to local agent output",
                 extra={"provider": self.provider, "model": self.model, "error": str(exc)},
             )
-            return {}
-
-        return _parse_chat_completion_json(body)
-
-    def _has_valid_key(self) -> bool:
-        return is_valid_model_gateway_key(self.provider, self.api_key)
+            return None
 
 
 def _parse_chat_completion_json(body: dict) -> dict:
-    choices = body.get("choices", [])
-    if not choices:
-        return {}
-    message = choices[0].get("message", {})
-    content = message.get("content")
+    content = _extract_chat_completion_content(body)
     if isinstance(content, dict):
         return content
     if not isinstance(content, str) or not content.strip():
@@ -89,6 +105,19 @@ def _parse_chat_completion_json(body: dict) -> dict:
     if not isinstance(parsed, dict):
         return {}
     return parsed
+
+
+def _extract_chat_completion_content(body: dict) -> str:
+    choices = body.get("choices", [])
+    if not choices:
+        return ""
+    message = choices[0].get("message", {})
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        return json.dumps(content, ensure_ascii=False)
+    return ""
 
 
 _gateway: ModelGateway | None = None

@@ -1,6 +1,7 @@
 from app.agents.co_creation_agent import get_prompt_spec as get_co_creation_prompt
 from app.agents.lesson_plan_agent import get_prompt_spec as get_lesson_plan_prompt
 from app.agents.orchestrator import AgentOrchestrator
+from app.agents.prompt_protocol import build_repair_prompt
 from app.agents.quality_agent import get_prompt_spec as get_quality_prompt
 from app.agents.teaching_design_agent import get_prompt_spec as get_teaching_design_prompt
 from app.models.course_project import CourseProject
@@ -50,3 +51,19 @@ def test_orchestrator_prompt_contains_stage_transition_rules():
     assert prompt.stage == "clarifying"
     assert "Stage transition rules" in prompt.system_prompt
     assert "qc -> delivery only when no blocking issue remains" in prompt.system_prompt
+
+
+def test_repair_prompt_contains_level_specific_instructions():
+    state = CourseState(topic="分数加减法", subject="数学", grade="四年级", duration=40)
+    base_prompt = get_co_creation_prompt(state, "我要备课")
+
+    level_1 = build_repair_prompt(base_prompt, raw_content="{}", level=1)
+    level_2 = build_repair_prompt(base_prompt, raw_content="", level=2)
+
+    assert level_1.response_format == {"type": "json_object"}
+    assert "Repair Level 1" in level_1.system_prompt
+    assert "Your previous response did not satisfy the schema." in level_1.system_prompt
+    assert "JSON schema example" in level_1.system_prompt
+    assert level_2.response_format == {"type": "json_object"}
+    assert "Repair Level 2" in level_2.system_prompt
+    assert "Return one valid JSON object only." in level_2.system_prompt
