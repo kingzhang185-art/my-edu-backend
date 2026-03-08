@@ -1,10 +1,11 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from app.models.course_project import CourseProject
 from app.repositories.course_project_repo import InMemoryCourseProjectRepo
 from app.schemas.course_project import CourseProjectResponse, CreateCourseRequest
 from app.schemas.plan_option import ConfirmPlanRequest
 from app.services.course_project_service import CourseProjectService
+from app.services.generation_service import get_generation_service
 from app.workflows.plan_options_workflow import generate_plan_options
 
 router = APIRouter(prefix="/api/v1/courses", tags=["courses"])
@@ -53,3 +54,14 @@ def confirm_plan(course_id: str, payload: ConfirmPlanRequest) -> CourseProjectRe
     course.selected_option_id = payload.option_id
     course.stage = "plan_confirmed"
     return _to_response(course)
+
+
+@router.post("/{course_id}/generate-lesson-plan", status_code=status.HTTP_202_ACCEPTED)
+def generate_lesson_plan(course_id: str) -> dict[str, str]:
+    course = _service.get_or_404(course_id)
+    if course.stage != "plan_confirmed":
+        raise HTTPException(status_code=400, detail="plan not confirmed")
+
+    task = get_generation_service().start_task(course_id)
+    course.stage = "generating"
+    return {"task_id": task.id}
