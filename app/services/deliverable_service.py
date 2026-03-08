@@ -54,6 +54,14 @@ class SqlDeliverableService:
 
         if section == "timeline":
             lesson_plan["timeline"] = [{"phase": "导入", "minutes": 8, "regenerated": True}]
+        elif section == "exercises":
+            lesson_plan["exercises"] = ["已重新生成练习题（示例）"]
+        elif section == "board_plan":
+            lesson_plan["board_plan"] = "已重新生成板书设计（示例）"
+        elif section == "objectives":
+            lesson_plan["objectives"] = ["已重新生成教学目标（示例）"]
+        elif section == "teacher_script":
+            lesson_plan["teacher_script"] = ["已重新生成教师讲稿（示例）"]
         else:
             lesson_plan[section] = {"regenerated": True}
 

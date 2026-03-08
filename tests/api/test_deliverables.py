@@ -36,3 +36,13 @@ def test_regenerate_section():
     )
     assert resp.status_code == 200
     assert "lesson_plan" in resp.json()
+
+
+def test_regenerate_exercises_preserves_expected_shape():
+    generated_course_id = _build_generated_course_id()
+
+    resp = client.post(
+        f"/api/v1/courses/{generated_course_id}/deliverables/exercises/regenerate"
+    )
+    assert resp.status_code == 200
+    assert isinstance(resp.json()["lesson_plan"]["exercises"], list)

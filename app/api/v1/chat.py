@@ -4,7 +4,7 @@ from app.agents.orchestrator import get_agent_orchestrator
 from app.api.v1.courses import get_course_service
 from app.db.session import SessionLocal
 from app.repositories.conversation_message_repo import SqlAlchemyConversationMessageRepo
-from app.schemas.chat import ChatRequest
+from app.schemas.chat import ChatRequest, MessageItemResponse
 from app.services.usage_log_service import UsageLogService
 
 router = APIRouter(prefix="/api/v1/courses", tags=["chat"])
@@ -24,3 +24,12 @@ def chat(course_id: str, payload: ChatRequest) -> dict[str, str]:
     _message_repo.append(course_id, "assistant", result["assistant_reply"])
     _usage_log_service.log("chat_message", course_id, {"message_length": len(payload.message)})
     return result
+
+
+@router.get("/{course_id}/messages")
+def list_messages(course_id: str) -> dict[str, list[MessageItemResponse]]:
+    get_course_service().get_or_404(course_id)
+    rows = _message_repo.list_by_course(course_id)
+    return {
+        "items": [MessageItemResponse.model_validate(row) for row in rows],
+    }

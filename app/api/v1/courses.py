@@ -1,13 +1,18 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.agents.orchestrator import get_agent_orchestrator
 from app.core.error_codes import ErrorCode
 from app.core.exceptions import AppError
-from app.db.models import CoursePlanOptionModel
+from app.db.models import CoursePlanOptionModel, CourseProjectModel
 from app.db.session import SessionLocal
 from app.models.course_project import CourseProject
 from app.repositories.course_project_repo import SqlAlchemyCourseProjectRepo
-from app.schemas.course_project import CourseProjectResponse, CreateCourseRequest
+from app.schemas.course_project import (
+    CourseListItemResponse,
+    CourseProjectResponse,
+    CreateCourseRequest,
+    UpdateCourseRequest,
+)
 from app.schemas.plan_option import ConfirmPlanRequest
 from app.services.course_project_service import CourseProjectService
 from app.services.usage_log_service import UsageLogService
@@ -34,9 +39,47 @@ def create_course(payload: CreateCourseRequest) -> CourseProjectResponse:
     return _to_response(course)
 
 
+@router.get("", response_model=list[CourseListItemResponse])
+def list_courses(limit: int = Query(default=20, ge=1, le=200)) -> list[CourseListItemResponse]:
+    with SessionLocal() as session:
+        records = (
+            session.query(CourseProjectModel)
+            .order_by(CourseProjectModel.updated_at.desc())
+            .limit(limit)
+            .all()
+        )
+    return [
+        CourseListItemResponse(
+            id=str(record.id),
+            topic=record.topic,
+            grade=record.grade,
+            stage=record.stage,
+            updated_at=record.updated_at,
+        )
+        for record in records
+    ]
+
+
 @router.get("/{course_id}", response_model=CourseProjectResponse)
 def get_course(course_id: str) -> CourseProjectResponse:
     course = _service.get_or_404(course_id)
+    return _to_response(course)
+
+
+@router.patch("/{course_id}", response_model=CourseProjectResponse)
+def update_course(course_id: str, payload: UpdateCourseRequest) -> CourseProjectResponse:
+    course = _service.get_or_404(course_id)
+    if payload.topic is not None:
+        course.topic = payload.topic
+    if payload.subject is not None:
+        course.subject = payload.subject
+    if payload.grade is not None:
+        course.grade = payload.grade
+    if payload.duration is not None:
+        course.duration = payload.duration
+
+    _service.save(course)
+    _usage_log_service.log("course_updated", course_id, payload.model_dump(exclude_none=True))
     return _to_response(course)
 
 
