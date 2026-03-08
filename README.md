@@ -57,6 +57,7 @@ python -m pytest -q
 ```bash
 curl http://localhost:8000/api/v1/health
 curl http://localhost:8000/api/v1/meta/error-codes
+curl http://localhost:8000/api/v1/meta/model-gateway
 ```
 
 Error response shape (unified):

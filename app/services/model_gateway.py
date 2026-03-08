@@ -69,12 +69,7 @@ class DeepSeekModelGateway:
         return _parse_chat_completion_json(body)
 
     def _has_valid_key(self) -> bool:
-        key = self.api_key.strip()
-        if not key:
-            return False
-        if key in {"replace-me", "your-deepseek-sk"}:
-            return False
-        return key.startswith("sk-")
+        return is_valid_model_gateway_key(self.provider, self.api_key)
 
 
 def _parse_chat_completion_json(body: dict) -> dict:
@@ -110,3 +105,29 @@ def get_model_gateway() -> ModelGateway:
             timeout_seconds=settings.model_gateway_timeout_seconds,
         )
     return _gateway
+
+
+def is_valid_model_gateway_key(provider: str, api_key: str) -> bool:
+    if provider != "deepseek":
+        return False
+    key = api_key.strip()
+    if not key:
+        return False
+    if key in {"replace-me", "your-deepseek-sk"}:
+        return False
+    return key.startswith("sk-")
+
+
+def get_model_gateway_meta() -> dict[str, object]:
+    key_configured = is_valid_model_gateway_key(
+        settings.model_gateway_provider,
+        settings.model_gateway_api_key,
+    )
+    return {
+        "provider": settings.model_gateway_provider,
+        "model": settings.model_gateway_model,
+        "base_url": settings.model_gateway_base_url,
+        "timeout_seconds": settings.model_gateway_timeout_seconds,
+        "key_configured": key_configured,
+        "ready": key_configured,
+    }
