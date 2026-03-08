@@ -52,4 +52,18 @@ python -m pytest -q
 
 ```bash
 curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v1/meta/error-codes
+```
+
+Error response shape (unified):
+
+```json
+{
+  "detail": "task not found",
+  "error": {
+    "code": "task_not_found",
+    "message": "task not found",
+    "request_id": "..."
+  }
+}
 ```

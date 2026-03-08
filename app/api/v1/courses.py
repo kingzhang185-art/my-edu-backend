@@ -1,5 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
+from app.agents.orchestrator import get_agent_orchestrator
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppError
 from app.db.models import CoursePlanOptionModel
 from app.db.session import SessionLocal
 from app.models.course_project import CourseProject
@@ -7,10 +10,7 @@ from app.repositories.course_project_repo import SqlAlchemyCourseProjectRepo
 from app.schemas.course_project import CourseProjectResponse, CreateCourseRequest
 from app.schemas.plan_option import ConfirmPlanRequest
 from app.services.course_project_service import CourseProjectService
-from app.services.deliverable_service import get_deliverable_service
-from app.services.generation_service import get_generation_service
 from app.services.usage_log_service import UsageLogService
-from app.workflows.plan_options_workflow import generate_plan_options
 
 router = APIRouter(prefix="/api/v1/courses", tags=["courses"])
 
@@ -43,7 +43,8 @@ def get_course(course_id: str) -> CourseProjectResponse:
 @router.post("/{course_id}/plan-options")
 def create_plan_options(course_id: str) -> dict[str, list[dict[str, str]]]:
     course = _service.get_or_404(course_id)
-    options = generate_plan_options(course)
+    options = get_agent_orchestrator().build_plan_options(course)
+    _service.save(course)
     _replace_plan_options(course_id, options["items"])
     _usage_log_service.log("plan_options_generated", course_id, {"count": len(options["items"])})
     return options
@@ -67,11 +68,13 @@ def confirm_plan(course_id: str, payload: ConfirmPlanRequest) -> CourseProjectRe
 def generate_lesson_plan(course_id: str) -> dict[str, str]:
     course = _service.get_or_404(course_id)
     if course.stage != "plan_confirmed":
-        raise HTTPException(status_code=400, detail="plan not confirmed")
+        raise AppError(
+            status_code=400,
+            code=ErrorCode.PLAN_NOT_CONFIRMED,
+            message="plan not confirmed",
+        )
 
-    task = get_generation_service().start_task(course_id)
-    get_deliverable_service().upsert_placeholder(course_id)
-    course.stage = "generated"
+    task = get_agent_orchestrator().run_generation_pipeline(course)
     _service.save(course)
     _usage_log_service.log("generation_started", course_id, {"task_id": task.id})
     return {"task_id": task.id}

@@ -12,8 +12,10 @@ from app.api.v1.chat import router as chat_router
 from app.api.v1.courses import router as courses_router
 from app.api.v1.deliverables import router as deliverables_router
 from app.api.v1.export import router as export_router
+from app.api.v1.meta import router as meta_router
 from app.api.v1.tasks import router as tasks_router
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
 from app.db.init_db import init_db
 
@@ -42,22 +44,28 @@ app.include_router(chat_router)
 app.include_router(tasks_router)
 app.include_router(deliverables_router)
 app.include_router(export_router)
+app.include_router(meta_router)
+register_exception_handlers(app)
 
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next) -> Response:
     request_id = request.headers.get("x-request-id") or str(uuid4())
+    request.state.request_id = request_id
     start = time.perf_counter()
     response = await call_next(request)
     duration_ms = round((time.perf_counter() - start) * 1000, 2)
     response.headers["X-Request-ID"] = request_id
     logger.info(
-        "%s %s -> %s (%sms) request_id=%s",
-        request.method,
-        request.url.path,
-        response.status_code,
-        duration_ms,
-        request_id,
+        "HTTP request completed",
+        extra={
+            "event": "http_request",
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": duration_ms,
+        },
     )
     return response
 

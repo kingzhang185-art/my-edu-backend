@@ -1,7 +1,7 @@
 from uuid import uuid4
 
-from fastapi import HTTPException
-
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppError
 from app.db.models import ExportRecordModel
 from app.db.session import SessionLocal
 from app.services.deliverable_service import get_deliverable_service
@@ -10,7 +10,11 @@ from app.services.deliverable_service import get_deliverable_service
 class SqlExportService:
     def create_export(self, course_id: str, fmt: str) -> dict[str, str]:
         if fmt not in {"pdf", "word"}:
-            raise HTTPException(status_code=400, detail="unsupported export format")
+            raise AppError(
+                status_code=400,
+                code=ErrorCode.UNSUPPORTED_EXPORT_FORMAT,
+                message="unsupported export format",
+            )
 
         latest = get_deliverable_service().get_latest(course_id)
         lesson_plan = latest["lesson_plan"]
@@ -26,7 +30,11 @@ class SqlExportService:
         }
         parsed_course_id = _parse_course_id(course_id)
         if parsed_course_id is None:
-            raise HTTPException(status_code=404, detail="course not found")
+            raise AppError(
+                status_code=404,
+                code=ErrorCode.COURSE_NOT_FOUND,
+                message="course not found",
+            )
 
         with SessionLocal() as session:
             session.add(

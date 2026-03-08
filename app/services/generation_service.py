@@ -1,8 +1,8 @@
 from uuid import uuid4
 import json
 
-from fastapi import HTTPException
-
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppError
 from app.db.models import GenerationTaskItemModel, GenerationTaskModel
 from app.db.session import SessionLocal
 from app.tasks.generation_tasks import GenerationTask
@@ -12,7 +12,11 @@ class SqlGenerationService:
     def start_task(self, course_id: str, item_keys: list[str] | None = None) -> GenerationTask:
         parsed_course_id = _parse_course_id(course_id)
         if parsed_course_id is None:
-            raise HTTPException(status_code=404, detail="course not found")
+            raise AppError(
+                status_code=404,
+                code=ErrorCode.COURSE_NOT_FOUND,
+                message="course not found",
+            )
 
         keys = item_keys or ["lesson_plan"]
         task_id = str(uuid4())
@@ -43,7 +47,11 @@ class SqlGenerationService:
         with SessionLocal() as session:
             record = session.get(GenerationTaskModel, task_id)
             if record is None:
-                raise HTTPException(status_code=404, detail="task not found")
+                raise AppError(
+                    status_code=404,
+                    code=ErrorCode.TASK_NOT_FOUND,
+                    message="task not found",
+                )
             return GenerationTask(
                 id=record.id,
                 course_id=str(record.course_id),
@@ -55,7 +63,11 @@ class SqlGenerationService:
         with SessionLocal() as session:
             record = session.get(GenerationTaskModel, task_id)
             if record is None:
-                raise HTTPException(status_code=404, detail="task not found")
+                raise AppError(
+                    status_code=404,
+                    code=ErrorCode.TASK_NOT_FOUND,
+                    message="task not found",
+                )
             record.status = status
             record.error_message = error_message
             session.commit()
@@ -76,7 +88,11 @@ class SqlGenerationService:
                 .first()
             )
             if item is None:
-                raise HTTPException(status_code=404, detail=f"task item not found: {item_key}")
+                raise AppError(
+                    status_code=404,
+                    code=ErrorCode.TASK_ITEM_NOT_FOUND,
+                    message=f"task item not found: {item_key}",
+                )
             item.status = status
             item.error_message = error_message
             item.output_json = None if output is None else json.dumps(output, ensure_ascii=False)

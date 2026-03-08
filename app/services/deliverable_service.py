@@ -1,7 +1,7 @@
 import json
 
-from fastapi import HTTPException
-
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import AppError
 from app.db.models import CourseProjectVersionModel
 from app.db.session import SessionLocal
 
@@ -18,10 +18,19 @@ class SqlDeliverableService:
         }
         return self._create_version(course_id, lesson_plan, source="generate")
 
+    def upsert_generated(self, course_id: str, lesson_plan: dict, quality_report: dict) -> dict:
+        payload = dict(lesson_plan)
+        payload["quality_report"] = quality_report
+        return self._create_version(course_id, payload, source="generate")
+
     def get_latest(self, course_id: str) -> dict:
         parsed_id = _parse_course_id(course_id)
         if parsed_id is None:
-            raise HTTPException(status_code=404, detail="deliverable not found")
+            raise AppError(
+                status_code=404,
+                code=ErrorCode.DELIVERABLE_NOT_FOUND,
+                message="deliverable not found",
+            )
 
         with SessionLocal() as session:
             record = (
@@ -31,7 +40,11 @@ class SqlDeliverableService:
                 .first()
             )
         if record is None:
-            raise HTTPException(status_code=404, detail="deliverable not found")
+            raise AppError(
+                status_code=404,
+                code=ErrorCode.DELIVERABLE_NOT_FOUND,
+                message="deliverable not found",
+            )
         payload = json.loads(record.snapshot_json)
         return {"course_id": course_id, "lesson_plan": payload["lesson_plan"]}
 
@@ -50,7 +63,11 @@ class SqlDeliverableService:
     def _create_version(self, course_id: str, lesson_plan: dict, source: str) -> dict:
         parsed_id = _parse_course_id(course_id)
         if parsed_id is None:
-            raise HTTPException(status_code=404, detail="course not found")
+            raise AppError(
+                status_code=404,
+                code=ErrorCode.COURSE_NOT_FOUND,
+                message="course not found",
+            )
 
         with SessionLocal() as session:
             current_max = (
